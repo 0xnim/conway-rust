@@ -6,8 +6,6 @@ use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 use std::io::Stdout;
 use std::io::{stdout, Read, Write};
 use std::os::unix::io::AsRawFd;
-use std::sync::mpsc;
-use std::thread;
 use termion::clear;
 use termion::cursor;
 use termion::cursor::{Goto, Hide, Show};
@@ -16,7 +14,6 @@ use termion::style;
 use termion::terminal_size;
 
 fn main() {
-    let mut stdin = std::io::stdin();
     let mut stdout = std::io::stdout().into_raw_mode().unwrap();
     write!(stdout, "{}", termion::cursor::Hide).unwrap();
 
@@ -37,24 +34,16 @@ fn main() {
     let mut buffer = [0u8; 1];
 
     let mut on = false;
-    let read_char_time = 100;
-    let mut read_char_timer = 0;
-    let mut read_char = true;
+
     world.randomize();
     home(width, height, &mut stdout);
     loop {
-        read_char_timer -= 1;
-        if read_char_timer <= 0 {
-            read_char = true;
-            read_char_timer = read_char_time;
-        }
-        if read_char {
-            match std::io::stdin().read(&mut buffer) {
-                Ok(0) => {
-                    // std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-                Ok(_) => {
-                    match buffer[0] {
+        match std::io::stdin().read(&mut buffer) {
+            Ok(0) => {
+                // std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Ok(_) => {
+                match buffer[0] {
                     b'q' => break,              // Exit the loop when 'q' is pressed.
                     b'r' => world.randomize(), // Randomize the world when 'r' is pressed
                     b' ' => on = !on,          // Start/stop the world when 's' is pressed
@@ -64,21 +53,19 @@ fn main() {
                     , // Home screen when 'h' is pressed
                     _ => {}                    // Ignore other inputs
                 }
-                }
-                Err(e) => {
-                    // eprintln!("Error reading from stdin: {}", e);
-                    // std::thread::sleep(std::time::Duration::from_millis(100));
-                }
+            }
+            Err(e) => {
+                // eprintln!("Error reading from stdin: {}", e);
+                // std::thread::sleep(std::time::Duration::from_millis(100));
             }
         }
-
         // when user presses q, exit the loop
         if on {
             world.next_generation();
             write!(stdout, "{}{}", clear::All, world).unwrap();
             stdout.flush().unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
     quit(stdout);
 }
