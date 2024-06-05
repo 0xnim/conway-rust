@@ -1,7 +1,11 @@
 // Conways game of life
 
+extern crate libc;
+
+use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 use std::io::Stdout;
 use std::io::{stdout, Read, Write};
+use std::os::unix::io::AsRawFd;
 use std::sync::mpsc;
 use std::thread;
 use termion::clear;
@@ -21,29 +25,36 @@ fn main() {
     let height = height as usize;
     let mut world = World::new(width, height);
 
+    // Set stdin to non-blocking
+    unsafe {
+        let fd = std::io::stdin().as_raw_fd();
+        let flags = fcntl(fd, F_GETFL, 0);
+        if flags != -1 {
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
+    }
+
     let mut buffer = [0u8; 1];
 
-    let (tx, rx) = mpsc::channel();
-
-    let input_thread = thread::spawn(move || {
-        loop {
-            match stdin.read(&mut buffer) {
-                Ok(0) => {} // No input available, continue the loop
-                Ok(_) => {
-                    tx.send(buffer[0]).unwrap();
-                }
-                Err(e) => eprintln!("Error reading from stdin: {}", e),
-            }
-        }
-    });
-
     let mut on = false;
+    let read_char_time = 100;
+    let mut read_char_timer = 0;
+    let mut read_char = true;
     world.randomize();
     home(width, height, &mut stdout);
     loop {
-        match rx.try_recv() {
-            Ok(input) => {
-                match input {
+        read_char_timer -= 1;
+        if read_char_timer <= 0 {
+            read_char = true;
+            read_char_timer = read_char_time;
+        }
+        if read_char {
+            match std::io::stdin().read(&mut buffer) {
+                Ok(0) => {
+                    // std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Ok(_) => {
+                    match buffer[0] {
                     b'q' => break,              // Exit the loop when 'q' is pressed.
                     b'r' => world.randomize(), // Randomize the world when 'r' is pressed
                     b' ' => on = !on,          // Start/stop the world when 's' is pressed
@@ -53,9 +64,12 @@ fn main() {
                     , // Home screen when 'h' is pressed
                     _ => {}                    // Ignore other inputs
                 }
+                }
+                Err(e) => {
+                    // eprintln!("Error reading from stdin: {}", e);
+                    // std::thread::sleep(std::time::Duration::from_millis(100));
+                }
             }
-            Err(mpsc::TryRecvError::Empty) => {} // No input available, continue the loop
-            Err(mpsc::TryRecvError::Disconnected) => break, // Input thread has terminated, exit the loop
         }
 
         // when user presses q, exit the loop
