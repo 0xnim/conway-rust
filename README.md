@@ -1,1 +1,1 @@
-Simple Conways life game. Has instructions.
+Simple Conways life game. Has instructions on run
